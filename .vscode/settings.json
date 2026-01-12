@@ -3,4 +3,5 @@
         "./rust/main/Cargo.toml",
         "./rust/sealevel/Cargo.toml",
     ],
+    "wake.compiler.solc.remappings": [],
 }

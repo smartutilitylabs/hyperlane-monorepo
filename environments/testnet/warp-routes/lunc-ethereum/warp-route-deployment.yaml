@@ -1,0 +1,54 @@
+---
+# Configuração do Warp Route Sintético no Ethereum
+# Token com funcionalidade de queima automática (0.01% em transferências locais)
+# 
+# Este arquivo segue a mesma lógica do deploy na Solana, mas adaptado para Ethereum
+# O contrato HypERC20 já implementa a funcionalidade de queima
+# 
+# Baseado no exemplo: https://github.com/igorv43/cw-hyperlane/blob/main/WARP-ROUTES-TESTNET.md
+
+ethereum:
+  isNft: false  # Token fungível (false) ou NFT (true)
+  type: synthetic
+  
+  # Metadados do token (obrigatórios para synthetic)
+  name: "Luna Classic"
+  symbol: "wwwwLUNC"
+  decimals: 18  # Padrão para Ethereum (pode ser 6 se quiser manter compatibilidade com Terra Classic)
+  totalSupply: 0  # Supply inicial - pode ser 0 para tokens sintéticos
+  
+  # Owner do contrato (obrigatório - substitua pelo seu endereço)
+  owner: "0xYOUR_ETHEREUM_ADDRESS_HERE"
+  
+  # Endereço do Mailbox (opcional - será preenchido automaticamente se não especificado)
+  # O CLI tentará encontrar automaticamente no registry
+  # mailbox: "0x35231d4c2D8B8ADcB5617Aea1C3DF4fB04F6a8F4"
+  
+  # Interchain Gas Paymaster (opcional)
+  # interchainGasPaymaster: "0xYourIGPAddress"
+  
+  # Interchain Security Module (ISM) - Configuração de segurança
+  # Define quais validadores devem assinar as mensagens cross-chain
+  interchainSecurityModule:
+    type: messageIdMultisigIsm  # Tipo de ISM: multisig baseado em message ID
+    validators:  # Lista de endereços dos validadores (hexadecimal sem 0x)
+      - "242d8a855a8c932dec51f7999ae7d1e48b10c95e"
+      - "f620f5e3d25a3ae848fec74bccae5de3edcd8796"
+      - "1f030345963c54ff8229720dd3a711c15c554aeb"
+    threshold: 2  # Número mínimo de assinaturas necessárias (2 de 3 validadores)
+
+# Exemplo: Para linkar com outras chains, adicione abaixo:
+#
+# terraclassic:
+#   type: synthetic
+#   name: "Luna Classic"
+#   symbol: "wwwwLUNC"
+#   totalSupply: 0
+#
+# solanatestnet:
+#   type: synthetic
+#   name: "Luna Classic"
+#   symbol: "wwwwLUNC"
+#   totalSupply: 0
+#   decimals: 9
+#   remoteDecimals: 18

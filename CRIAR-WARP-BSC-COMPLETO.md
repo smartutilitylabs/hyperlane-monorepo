@@ -137,7 +137,46 @@ mkdir -p ~/.hyperlane/registry
 
 ## Passo 3: Deploy do Warp Route Sintético
 
-### 3.1. Preparar Variáveis de Ambiente
+### 3.1. ⚠️ IMPORTANTE: Deploy com Funcionalidade de Queima
+
+**PROBLEMA**: O Hyperlane CLI sempre deploya a versão **oficial** do HypERC20 do pacote npm, que **NÃO tem** a funcionalidade de queima (0.01%).
+
+**SOLUÇÃO**: Para ter a funcionalidade de queima, você precisa fazer o **deploy manual** usando Foundry do contrato local que tem a queima implementada.
+
+### 3.2. Opção A: Deploy Manual com Queima (Recomendado)
+
+Se você precisa da funcionalidade de queima (0.01% em transferências locais):
+
+```bash
+cd ~/smart-hyperlane-monorepo/solidity
+
+# 1. Instalar dependências do Soldeer (gerenciador de dependências do Foundry)
+forge soldeer install
+
+# 2. Compilar contratos
+forge build
+
+# 3. Executar deploy manual com queima
+export PRIVATE_KEY="0x819b680e3578eac4f79b8fde643046e88f3f9bb10a3ce1424e3642798ef39b42"
+
+forge script script/DeployHypERC20WithBurn.s.sol:DeployHypERC20WithBurn \
+  --rpc-url https://bsc-testnet.publicnode.com \
+  --broadcast \
+  --legacy \
+  -vvv
+```
+
+**O script irá:**
+- ✅ Deploy do ProxyAdmin
+- ✅ Deploy da implementação HypERC20 **com funcionalidade de queima**
+- ✅ Deploy do Proxy (endereço do token)
+- ✅ Inicialização com supply inicial de 15.000.000.000 tokens
+
+**Anotar o endereço do Proxy** retornado (esse é o endereço do token com queima).
+
+### 3.3. Opção B: Deploy via Hyperlane CLI (Sem Queima)
+
+Se você não precisa da funcionalidade de queima, pode usar o CLI normalmente:
 
 ```bash
 # Configurar variáveis
@@ -146,25 +185,16 @@ CONFIG_FILE="environments/testnet/warp-routes/lunc-bsc/warp-route-deployment.yam
 REGISTRY_PATH="~/.hyperlane/registry"
 BSC_PRIVATE_KEY="0xYourPrivateKey"  # ⚠️ Substitua pela sua chave privada
 
-# Para BSC Testnet
-CHAIN_NAME="bsctestnet"
-```
-
-### 3.2. Deploy do Warp Route
-
-**⚠️ IMPORTANTE**: O deploy no BSC usa o CLI TypeScript, similar ao Ethereum.
-
-```bash
-cd ~/smart-hyperlane-monorepo
-
 # Deploy do warp route sintético no BSC Testnet
-hyperlane warp deploy \
+npx @hyperlane-xyz/cli warp deploy \
   --config ${CONFIG_FILE} \
   --registry ${REGISTRY_PATH} \
   --private-key ${BSC_PRIVATE_KEY} \
   --yes \
   --verbosity debug
 ```
+
+**⚠️ ATENÇÃO**: Este método deploya a versão oficial **SEM** funcionalidade de queima.
 
 **Alternativa usando npx (sem instalação global):**
 
@@ -186,13 +216,24 @@ Deploying Warp Route contracts...
 ✅ Warp route deployment complete!
 ```
 
-### 3.3. Verificar Deploy
+### 3.4. Verificar Deploy
 
 ```bash
 # Verificar o contrato deployado
 # O endereço do contrato será exibido na saída do deploy
 
 CONTRACT_ADDRESS="0x..."  # Substitua pelo endereço retornado
+
+# Verificar supply total (deve ser 15000000000)
+cast call ${CONTRACT_ADDRESS} \
+  "totalSupply()" \
+  --rpc-url https://bsc-testnet.publicnode.com
+
+# Verificar saldo do owner (deve ter 15000000000)
+cast call ${CONTRACT_ADDRESS} \
+  "balanceOf(address)" \
+  0x8BD456605473ad4727ACfDCA0040a0dBD4be2DEA \
+  --rpc-url https://bsc-testnet.publicnode.com
 
 # Verificar no BscScan Testnet
 # https://testnet.bscscan.com/address/${CONTRACT_ADDRESS}
@@ -287,15 +328,94 @@ O contrato `HypERC20` implementa automaticamente:
 - **Transferências cross-chain**: Não são afetadas pela queima
 - **Evento emitido**: `BurnFeeApplied` quando a queima ocorre
 
-### 6.2. Verificar Queima em Ação
+### 6.2. Testar Transferência e Verificar Queima
+
+**⚠️ IMPORTANTE**: A funcionalidade de queima só funciona se você fez o **deploy manual** usando Foundry (Opção A do Passo 3). Se usou o Hyperlane CLI (Opção B), o contrato não tem queima.
+
+#### 6.2.1. Transferir Tokens para Testar
 
 ```bash
-# Após o deploy, você pode testar a funcionalidade de queima
-# usando um script ou interagindo diretamente com o contrato
+# Substitua <TOKEN_ADDRESS> pelo endereço do seu contrato
+# Exemplo: 0xC61134c6794043db11120018BbFDD2F4280F2268 (contrato com queima)
 
-# Exemplo de transferência que acionará a queima:
-# transfer(to, amount) - queima 0.01% do amount
-# transferFrom(from, to, amount) - queima 0.01% do amount
+# Transferir 100 tokens (com 6 decimais = 100000000)
+cast send <TOKEN_ADDRESS> \
+  "transfer(address,uint256)" \
+  0x867f9CE9F0D7218b016351CB6122406E6D247a5e \
+  100000000 \
+  --rpc-url https://bsc-testnet.publicnode.com \
+  --private-key 0x819b680e3578eac4f79b8fde643046e88f3f9bb10a3ce1424e3642798ef39b42 \
+  --legacy
+```
+
+#### 6.2.2. Verificar Queima na Transação
+
+Após a transferência, verifique no BscScan:
+
+1. **Acesse a transação no BscScan**:
+   ```
+   https://testnet.bscscan.com/tx/<TRANSACTION_HASH>
+   ```
+
+2. **Procure pelos eventos**:
+   - ✅ **Evento `BurnFeeApplied`**: Confirma que a queima ocorreu
+     - `totalAmount`: 100000000 (100 tokens)
+     - `burnAmount`: 10000 (0.01 token = 0.01%)
+     - `transferAmount`: 99990000 (99.99 tokens)
+   - ✅ **Transfer para `0x0000...0000`**: Tokens queimados (10000)
+   - ✅ **Transfer para destinatário**: Tokens recebidos (99990000)
+
+3. **Verificar supply total** (deve ter diminuído):
+   ```bash
+   cast call <TOKEN_ADDRESS> \
+     "totalSupply()" \
+     --rpc-url https://bsc-testnet.publicnode.com
+   ```
+   - Deve ter diminuído em 10000 (0.01 token queimado)
+
+4. **Verificar saldo do destinatário**:
+   ```bash
+   cast call <TOKEN_ADDRESS> \
+     "balanceOf(address)" \
+     0x867f9CE9F0D7218b016351CB6122406E6D247a5e \
+     --rpc-url https://bsc-testnet.publicnode.com
+   ```
+   - Deve mostrar 99990000 (99.99 tokens recebidos)
+
+#### 6.2.3. Exemplo Completo de Teste
+
+```bash
+# Variáveis
+TOKEN_ADDRESS="0xC61134c6794043db11120018BbFDD2F4280F2268"
+RECIPIENT="0x867f9CE9F0D7218b016351CB6122406E6D247a5e"
+AMOUNT="100000000"  # 100 tokens com 6 decimais
+PRIVATE_KEY="0x819b680e3578eac4f79b8fde643046e88f3f9bb10a3ce1424e3642798ef39b42"
+RPC_URL="https://bsc-testnet.publicnode.com"
+
+# 1. Verificar supply antes
+echo "Supply antes:"
+cast call ${TOKEN_ADDRESS} "totalSupply()" --rpc-url ${RPC_URL}
+
+# 2. Fazer transferência
+echo "Fazendo transferência de 100 tokens..."
+cast send ${TOKEN_ADDRESS} \
+  "transfer(address,uint256)" \
+  ${RECIPIENT} \
+  ${AMOUNT} \
+  --rpc-url ${RPC_URL} \
+  --private-key ${PRIVATE_KEY} \
+  --legacy
+
+# 3. Verificar supply depois (deve ter diminuído em 10000)
+echo "Supply depois:"
+cast call ${TOKEN_ADDRESS} "totalSupply()" --rpc-url ${RPC_URL}
+
+# 4. Verificar saldo do destinatário (deve ter recebido 99990000)
+echo "Saldo do destinatário:"
+cast call ${TOKEN_ADDRESS} \
+  "balanceOf(address)" \
+  ${RECIPIENT} \
+  --rpc-url ${RPC_URL}
 ```
 
 ### 6.3. Código do Contrato
@@ -376,18 +496,50 @@ hyperlane warp read \
   --chain bsctestnet
 ```
 
-### 8.2. Verificar Funcionalidade de Queima
+### 8.2. Testar Funcionalidade de Queima
+
+**⚠️ IMPORTANTE**: A queima só funciona se você fez deploy manual (Passo 3.2). Se usou o Hyperlane CLI, não há queima.
+
+#### Transferir Tokens para Testar
 
 ```bash
-# Interagir com o contrato para testar a queima
-# Use um script ou ferramenta como cast (Foundry) ou ethers.js
+# Substitua <TOKEN_ADDRESS> pelo endereço do seu contrato
+TOKEN_ADDRESS="0xC61134c6794043db11120018BbFDD2F4280F2268"  # Exemplo
+RECIPIENT="0x867f9CE9F0D7218b016351CB6122406E6D247a5e"
+AMOUNT="100000000"  # 100 tokens com 6 decimais
 
-# Exemplo com cast (Foundry):
-# cast send ${CONTRACT_ADDRESS} "transfer(address,uint256)" ${TO_ADDRESS} ${AMOUNT} \
-#   --rpc-url https://data-seed-prebsc-1-s1.binance.org:8545 \
-#   --private-key ${BSC_PRIVATE_KEY}
+# Fazer transferência
+cast send ${TOKEN_ADDRESS} \
+  "transfer(address,uint256)" \
+  ${RECIPIENT} \
+  ${AMOUNT} \
+  --rpc-url https://bsc-testnet.publicnode.com \
+  --private-key 0x819b680e3578eac4f79b8fde643046e88f3f9bb10a3ce1424e3642798ef39b42 \
+  --legacy
+```
 
-# Verificar eventos de queima no BscScan
+#### Verificar Queima no BscScan
+
+1. Acesse a transação no BscScan usando o hash retornado
+2. Procure pelo evento `BurnFeeApplied`:
+   - `totalAmount`: 100000000 (100 tokens enviados)
+   - `burnAmount`: 10000 (0.01 token queimado = 0.01%)
+   - `transferAmount`: 99990000 (99.99 tokens recebidos)
+3. Verifique o supply total (deve ter diminuído em 10000)
+
+#### Verificar Resultados
+
+```bash
+# Verificar supply total (deve ter diminuído)
+cast call ${TOKEN_ADDRESS} \
+  "totalSupply()" \
+  --rpc-url https://bsc-testnet.publicnode.com
+
+# Verificar saldo do destinatário (deve ter 99990000)
+cast call ${TOKEN_ADDRESS} \
+  "balanceOf(address)" \
+  ${RECIPIENT} \
+  --rpc-url https://bsc-testnet.publicnode.com
 ```
 
 ---

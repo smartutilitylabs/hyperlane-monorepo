@@ -122,47 +122,81 @@ mkdir -p ~/.hyperlane/registry
 
 ## Passo 3: Deploy do Warp Route Sintético
 
-### 3.1. Preparar Variáveis de Ambiente
+### 3.1. ⚠️ IMPORTANTE: Deploy com Funcionalidade de Queima
+
+**PROBLEMA**: O Hyperlane CLI sempre deploya a versão **oficial** do HypERC20 do pacote npm, que **NÃO tem** a funcionalidade de queima (0.01%).
+
+**SOLUÇÃO**: Para ter a funcionalidade de queima, você precisa fazer o **deploy manual** usando Foundry do contrato local que tem a queima implementada.
+
+### 3.2. Preparar Variáveis de Ambiente
 
 ```bash
 # Configurar variáveis
 WARP_ROUTE_NAME="lunc-ethereum"
 CONFIG_FILE="environments/testnet/warp-routes/lunc-ethereum/warp-route-deployment.yaml"
 REGISTRY_PATH="~/.hyperlane/registry"
-PRIVATE_KEY="0xYourPrivateKey"  # Substitua pela sua chave privada
+PRIVATE_KEY="0xYourPrivateKey"  # ⚠️ Substitua pela sua chave privada
 
 # Para testnet (Sepolia, Goerli, etc.)
 # Para mainnet, use a rede apropriada
 ```
 
-### 3.2. Deploy do Warp Route
+### 3.3. Opção A: Deploy Manual com Queima (Recomendado)
 
-**⚠️ IMPORTANTE**: O deploy no Ethereum usa o CLI TypeScript, diferente da Solana que usa Rust.
+Se você precisa da funcionalidade de queima (0.01% em transferências locais):
 
 ```bash
-cd ~/smart-hyperlane-monorepo/typescript/cli
+cd ~/smart-hyperlane-monorepo/solidity
 
-# Instalar dependências se necessário
-pnpm install
+# 1. Instalar dependências do Soldeer (gerenciador de dependências do Foundry)
+forge soldeer install
+
+# 2. Compilar contratos
+forge build
+
+# 3. Executar deploy manual com queima
+export PRIVATE_KEY="0xYourPrivateKey"  # ⚠️ Substitua pela sua chave privada
+
+# Para Ethereum Sepolia Testnet
+forge script script/DeployHypERC20WithBurn.s.sol:DeployHypERC20WithBurn \
+  --rpc-url https://sepolia.infura.io/v3/YOUR_INFURA_KEY \
+  --broadcast \
+  -vvv
+
+# Para Ethereum Mainnet
+# forge script script/DeployHypERC20WithBurn.s.sol:DeployHypERC20WithBurn \
+#   --rpc-url https://mainnet.infura.io/v3/YOUR_INFURA_KEY \
+#   --broadcast \
+#   -vvv
+```
+
+**⚠️ NOTA**: Você precisará adaptar o script `DeployHypERC20WithBurn.s.sol` para usar os endereços corretos do Mailbox e ISM da rede Ethereum que você está usando.
+
+**O script irá:**
+- ✅ Deploy do ProxyAdmin
+- ✅ Deploy da implementação HypERC20 **com funcionalidade de queima**
+- ✅ Deploy do Proxy (endereço do token)
+- ✅ Inicialização com supply inicial configurado
+
+**Anotar o endereço do Proxy** retornado (esse é o endereço do token com queima).
+
+### 3.4. Opção B: Deploy via Hyperlane CLI (Sem Queima)
+
+Se você não precisa da funcionalidade de queima, pode usar o CLI normalmente:
+
+```bash
+cd ~/smart-hyperlane-monorepo
 
 # Deploy do warp route sintético
-pnpm hyperlane warp deploy \
+npx @hyperlane-xyz/cli warp deploy \
   --config ${CONFIG_FILE} \
   --registry ${REGISTRY_PATH} \
-  --key ${PRIVATE_KEY} \
+  --private-key ${PRIVATE_KEY} \
   --yes \
   --verbosity debug
 ```
 
-**Alternativa usando npx (se instalado globalmente):**
-
-```bash
-hyperlane warp deploy \
-  --config environments/testnet/warp-routes/lunc-ethereum/warp-route-deployment.yaml \
-  --registry ~/.hyperlane/registry \
-  --key ${PRIVATE_KEY} \
-  --yes
-```
+**⚠️ ATENÇÃO**: Este método deploya a versão oficial **SEM** funcionalidade de queima.
 
 **Saída esperada:**
 ```
@@ -174,7 +208,7 @@ Deploying Warp Route contracts...
 ✅ Warp route deployment complete!
 ```
 
-### 3.3. Verificar Deploy
+### 3.5. Verificar Deploy
 
 ```bash
 # Verificar o contrato deployado
@@ -286,15 +320,93 @@ O contrato `HypERC20` implementa automaticamente:
 - **Transferências cross-chain**: Não são afetadas pela queima
 - **Evento emitido**: `BurnFeeApplied` quando a queima ocorre
 
-### 5.2. Verificar Queima em Ação
+### 5.2. Testar Transferência e Verificar Queima
+
+**⚠️ IMPORTANTE**: A funcionalidade de queima só funciona se você fez o **deploy manual** usando Foundry (Opção A do Passo 3). Se usou o Hyperlane CLI (Opção B), o contrato não tem queima.
+
+#### 5.2.1. Transferir Tokens para Testar
 
 ```bash
-# Após o deploy, você pode testar a funcionalidade de queima
-# usando um script ou interagindo diretamente com o contrato
+# Substitua <TOKEN_ADDRESS> pelo endereço do seu contrato
+# Exemplo: 0x... (contrato com queima)
 
-# Exemplo de transferência que acionará a queima:
-# transfer(to, amount) - queima 0.01% do amount
-# transferFrom(from, to, amount) - queima 0.01% do amount
+# Transferir 100 tokens (com 18 decimais = 100000000000000000000)
+cast send <TOKEN_ADDRESS> \
+  "transfer(address,uint256)" \
+  0x867f9CE9F0D7218b016351CB6122406E6D247a5e \
+  100000000000000000000 \
+  --rpc-url https://sepolia.infura.io/v3/YOUR_INFURA_KEY \
+  --private-key 0xYourPrivateKey \
+  --legacy
+```
+
+#### 5.2.2. Verificar Queima na Transação
+
+Após a transferência, verifique no Etherscan:
+
+1. **Acesse a transação no Etherscan**:
+   ```
+   https://sepolia.etherscan.io/tx/<TRANSACTION_HASH>  # Sepolia
+   https://etherscan.io/tx/<TRANSACTION_HASH>  # Mainnet
+   ```
+
+2. **Procure pelos eventos**:
+   - ✅ **Evento `BurnFeeApplied`**: Confirma que a queima ocorreu
+     - `totalAmount`: 100000000000000000000 (100 tokens)
+     - `burnAmount`: 10000000000000000 (0.01 token = 0.01%)
+     - `transferAmount`: 99990000000000000000 (99.99 tokens)
+   - ✅ **Transfer para `0x0000...0000`**: Tokens queimados
+   - ✅ **Transfer para destinatário**: Tokens recebidos
+
+3. **Verificar supply total** (deve ter diminuído):
+   ```bash
+   cast call <TOKEN_ADDRESS> \
+     "totalSupply()" \
+     --rpc-url https://sepolia.infura.io/v3/YOUR_INFURA_KEY
+   ```
+
+4. **Verificar saldo do destinatário**:
+   ```bash
+   cast call <TOKEN_ADDRESS> \
+     "balanceOf(address)" \
+     0x867f9CE9F0D7218b016351CB6122406E6D247a5e \
+     --rpc-url https://sepolia.infura.io/v3/YOUR_INFURA_KEY
+   ```
+
+#### 5.2.3. Exemplo Completo de Teste
+
+```bash
+# Variáveis
+TOKEN_ADDRESS="0x..."  # Seu contrato deployado
+RECIPIENT="0x867f9CE9F0D7218b016351CB6122406E6D247a5e"
+AMOUNT="100000000000000000000"  # 100 tokens com 18 decimais
+PRIVATE_KEY="0xYourPrivateKey"
+RPC_URL="https://sepolia.infura.io/v3/YOUR_INFURA_KEY"
+
+# 1. Verificar supply antes
+echo "Supply antes:"
+cast call ${TOKEN_ADDRESS} "totalSupply()" --rpc-url ${RPC_URL}
+
+# 2. Fazer transferência
+echo "Fazendo transferência de 100 tokens..."
+cast send ${TOKEN_ADDRESS} \
+  "transfer(address,uint256)" \
+  ${RECIPIENT} \
+  ${AMOUNT} \
+  --rpc-url ${RPC_URL} \
+  --private-key ${PRIVATE_KEY} \
+  --legacy
+
+# 3. Verificar supply depois (deve ter diminuído)
+echo "Supply depois:"
+cast call ${TOKEN_ADDRESS} "totalSupply()" --rpc-url ${RPC_URL}
+
+# 4. Verificar saldo do destinatário
+echo "Saldo do destinatário:"
+cast call ${TOKEN_ADDRESS} \
+  "balanceOf(address)" \
+  ${RECIPIENT} \
+  --rpc-url ${RPC_URL}
 ```
 
 ### 5.3. Código do Contrato

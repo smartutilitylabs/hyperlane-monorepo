@@ -1,0 +1,729 @@
+# Complete Guide: Create Synthetic Warp Route on BSC (Binance Smart Chain)
+
+This guide provides step-by-step instructions to create a synthetic warp route on BSC Testnet following the same logic as the Solana deployment. The `HypERC20` contract already includes automatic burn functionality of 0.01% on local transfers.
+
+## Your Deployment Data
+
+- **Token**: 
+  - Name: `Luna Classic`
+  - Symbol: `wwwwLUNC`
+  - Decimals: `6` (compatible with Terra Classic) or `18` (BSC standard)
+  - Type: `synthetic`
+- **Chain**: BSC Testnet (Domain ID: 97)
+- **Burn Functionality**: 
+  - Burn rate: `0.01%` (1/10000) on local transfers
+  - Automatically implemented in the `HypERC20` contract
+  - Does not affect cross-chain transfers
+
+---
+
+## Step 1: Prepare Token Configuration
+
+### 1.1. Create Configuration Directory
+
+```bash
+cd ~/smart-hyperlane-monorepo
+
+# Create directory for configuration
+mkdir -p environments/testnet/warp-routes/lunc-bsc
+```
+
+### 1.2. Create Token Configuration File
+
+**⚠️ IMPORTANT**: The configuration file must be in YAML format, following the pattern from the [official guide](https://github.com/igorv43/cw-hyperlane/blob/main/WARP-ROUTES-TESTNET.md):
+
+```bash
+cat > environments/testnet/warp-routes/lunc-bsc/warp-route-deployment.yaml << 'EOF'
+---
+# Synthetic Warp Route Configuration on BSC Testnet
+# Token with automatic burn functionality (0.01% on local transfers)
+# 
+# This file follows the same logic as the Solana deployment, but adapted for BSC
+# The HypERC20 contract already implements the burn functionality
+# 
+# Based on example: https://github.com/igorv43/cw-hyperlane/blob/main/WARP-ROUTES-TESTNET.md
+
+bsctestnet:
+  isNft: false  # Fungible token (false) or NFT (true)
+  type: synthetic
+  
+  # Token metadata (required for synthetic)
+  name: "Luna Classic"
+  symbol: "wwwwLUNC"
+  decimals: 6  # 6 for Terra Classic compatibility, or 18 for BSC standard
+  totalSupply: 0  # Initial supply - can be 0 for synthetic tokens
+  
+  # Contract owner (required - replace with your BSC address)
+  owner: "0xYOUR_BSC_ADDRESS_HERE"
+  
+  # Mailbox address (optional - will be filled automatically if not specified)
+  # The CLI will try to find it automatically in the registry
+  # BSC Testnet Mailbox: 0xF9F6F5646F478d5ab4e20B0F910C92F1CCC9Cc6D
+  # mailbox: "0xF9F6F5646F478d5ab4e20B0F910C92F1CCC9Cc6D"
+  
+  # Interchain Gas Paymaster (optional)
+  # BSC Testnet IGP: 0x0dD20e410bdB95404f71c5a4e7Fa67B892A5f949
+  # interchainGasPaymaster: "0x0dD20e410bdB95404f71c5a4e7Fa67B892A5f949"
+  
+  # Interchain Security Module (ISM) - Security configuration
+  # Defines which validators must sign cross-chain messages
+  interchainSecurityModule:
+    type: messageIdMultisigIsm  # ISM type: multisig based on message ID
+    validators:  # List of validator addresses (hexadecimal without 0x)
+      - "242d8a855a8c932dec51f7999ae7d1e48b10c95e"
+      - "f620f5e3d25a3ae848fec74bccae5de3edcd8796"
+      - "1f030345963c54ff8229720dd3a711c15c554aeb"
+    threshold: 2  # Minimum number of signatures required (2 of 3 validators)
+EOF
+```
+
+**⚠️ IMPORTANT**: 
+- **Replace `0xYOUR_BSC_ADDRESS_HERE`** with your real BSC address
+- For synthetic tokens, `totalSupply` can be `0` (no initial supply)
+- The token will be minted as needed in cross-chain transfers
+- The burn function is already implemented in the `HypERC20` contract
+- **Validators**: Use the validator addresses from your network (example shows Terra Classic Testnet validators)
+- **Threshold**: Defines how many signatures are required (e.g., `2` means 2 of 3 validators must sign)
+- **Decimals**: Use `6` to maintain compatibility with Terra Classic, or `18` for BSC standard
+
+### 1.3. Verify Created File
+
+```bash
+cat environments/testnet/warp-routes/lunc-bsc/warp-route-deployment.yaml
+```
+
+---
+
+## Step 2: Verify Prerequisites
+
+### 2.1. Verify CLI Installation
+
+```bash
+# Check if CLI is installed
+npm list -g | grep hyperlane || echo "CLI not installed globally"
+
+# Install globally if needed
+npm install -g @hyperlane-xyz/cli
+
+# Check version
+hyperlane --version
+```
+
+### 2.2. Verify Registry Configuration
+
+```bash
+# Check if registry exists
+ls -la ~/.hyperlane/registry
+
+# If it doesn't exist, create it
+mkdir -p ~/.hyperlane/registry
+```
+
+### 2.3. Verify Private Key and BNB
+
+```bash
+# Check if you have a private key configured
+# You will need a private key with BNB for gas fees on BSC Testnet
+
+# Get BNB Testnet from a faucet:
+# https://testnet.bnbchain.org/faucet-smart
+# https://www.bnbchain.org/en/testnet-faucet
+
+# Example: export private key (NEVER share this key!)
+# export BSC_PRIVATE_KEY="0xYourPrivateKey"
+```
+
+---
+
+## Step 3: Deploy Synthetic Warp Route
+
+### 3.1. ⚠️ IMPORTANT: Deploy with Burn Functionality
+
+**PROBLEM**: The Hyperlane CLI always deploys the **official** version of HypERC20 from the npm package, which **does NOT have** the burn functionality (0.01%).
+
+**SOLUTION**: To have the burn functionality, you need to do a **manual deployment** using Foundry of the local contract that has the burn implemented.
+
+### 3.2. Option A: Manual Deploy with Burn (Recommended)
+
+If you need the burn functionality (0.01% on local transfers):
+
+```bash
+cd ~/smart-hyperlane-monorepo/solidity
+
+# 1. Install Soldeer dependencies (Foundry dependency manager)
+forge soldeer install
+
+# 2. Compile contracts
+forge build
+
+# 3. Execute manual deploy with burn
+export PRIVATE_KEY="0x819b680e3578eac4f79b8fde643046e88f3f9bb10a3ce1424e3642798ef39b42"
+
+forge script script/DeployHypERC20WithBurn.s.sol:DeployHypERC20WithBurn \
+  --rpc-url https://bsc-testnet.publicnode.com \
+  --broadcast \
+  --legacy \
+  -vvv
+```
+
+**The script will:**
+- ✅ Deploy ProxyAdmin
+- ✅ Deploy HypERC20 implementation **with burn functionality**
+- ✅ Deploy Proxy (token address)
+- ✅ Initialize with initial supply of 15,000,000,000 tokens
+
+**Note the Proxy address** returned (this is the token address with burn).
+
+### 3.3. Option B: Deploy via Hyperlane CLI (Without Burn)
+
+If you don't need the burn functionality, you can use the CLI normally:
+
+```bash
+# Configure variables
+WARP_ROUTE_NAME="lunc-bsc"
+CONFIG_FILE="environments/testnet/warp-routes/lunc-bsc/warp-route-deployment.yaml"
+REGISTRY_PATH="~/.hyperlane/registry"
+BSC_PRIVATE_KEY="0xYourPrivateKey"  # ⚠️ Replace with your private key
+
+# Deploy synthetic warp route on BSC Testnet
+npx @hyperlane-xyz/cli warp deploy \
+  --config ${CONFIG_FILE} \
+  --registry ${REGISTRY_PATH} \
+  --private-key ${BSC_PRIVATE_KEY} \
+  --yes \
+  --verbosity debug
+```
+
+**⚠️ ATTENTION**: This method deploys the official version **WITHOUT** burn functionality.
+
+**Alternative using npx (without global installation):**
+
+```bash
+npx @hyperlane-xyz/cli warp deploy \
+  --config environments/testnet/warp-routes/lunc-bsc/warp-route-deployment.yaml \
+  --registry ~/.hyperlane/registry \
+  --private-key ${BSC_PRIVATE_KEY} \
+  --yes
+```
+
+**Expected output:**
+```
+Deploying Warp Route contracts...
+✓ Deployed HypERC20Synthetic to bsctestnet at 0x...
+✓ Initialized token with name: Luna Classic, symbol: wwwwLUNC
+✓ Enrolled remote routers...
+✓ Configured destination gas amounts...
+✅ Warp route deployment complete!
+```
+
+### 3.4. Verify Deployment
+
+```bash
+# Verify the deployed contract
+# The contract address will be displayed in the deployment output
+
+CONTRACT_ADDRESS="0x..."  # Replace with the returned address
+
+# Verify total supply (should be 15000000000)
+cast call ${CONTRACT_ADDRESS} \
+  "totalSupply()" \
+  --rpc-url https://bsc-testnet.publicnode.com
+
+# Verify owner balance (should have 15000000000)
+cast call ${CONTRACT_ADDRESS} \
+  "balanceOf(address)" \
+  0x8BD456605473ad4727ACfDCA0040a0dBD4be2DEA \
+  --rpc-url https://bsc-testnet.publicnode.com
+
+# Verify on BscScan Testnet
+# https://testnet.bscscan.com/address/${CONTRACT_ADDRESS}
+```
+
+---
+
+## Step 4: Understand ISM (Interchain Security Module) Configuration
+
+### 4.1. What is ISM?
+
+The ISM (Interchain Security Module) is responsible for validating cross-chain messages. It defines which validators must sign messages before they are accepted.
+
+### 4.2. ISM Configuration Structure
+
+```yaml
+interchainSecurityModule:
+  type: messageIdMultisigIsm  # ISM type
+  validators:                  # List of validators
+    - "242d8a855a8c932dec51f7999ae7d1e48b10c95e"
+    - "f620f5e3d25a3ae848fec74bccae5de3edcd8796"
+    - "1f030345963c54ff8229720dd3a711c15c554aeb"
+  threshold: 2                 # Minimum signatures required
+```
+
+**Fields explained:**
+
+| Field | Description | Example |
+|-------|-----------|---------|
+| `type` | ISM type. `messageIdMultisigIsm` requires signatures from multiple validators | `messageIdMultisigIsm` |
+| `validators` | Array of validator addresses in hexadecimal (without `0x` prefix) | List of hex addresses |
+| `threshold` | Minimum number of validators that must sign a message | `2` (2 of 3 validators) |
+
+**⚠️ IMPORTANT about Validators:**
+- Addresses must be in hexadecimal format, **without the `0x` prefix**
+- Use validator addresses from your network (example shows Terra Classic Testnet validators)
+- The `threshold` must be less than or equal to the number of validators
+- Example: 3 validators with threshold 2 = 2 of 3 validators must sign
+
+## Step 5: Configure ISM (Interchain Security Module)
+
+### 5.1. ISM Configured in Deployment
+
+The ISM (Interchain Security Module) is already configured in the YAML file during deployment. The configuration includes:
+
+- **Type**: `messageIdMultisigIsm` - Requires signatures from multiple validators
+- **Validators**: List of validator addresses (without `0x` prefix)
+- **Threshold**: Minimum number of signatures required
+
+### 5.2. Update Validators After Deployment
+
+If you need to add or remove validators after deployment, use the `hyperlane warp apply` command:
+
+```bash
+# 1. Create warp.json file with the deployed token
+cat > warp/warp.json << EOF
+{
+  "tokens": [
+    {
+      "chainName": "bsctestnet",
+      "standard": "ERC20",
+      "addressOrDenom": "0xYOUR_DEPLOYED_TOKEN_ADDRESS",
+      "name": "Luna Classic",
+      "symbol": "wwwwLUNC",
+      "decimals": 6
+    }
+  ]
+}
+EOF
+
+# 2. Update the configuration file with new validators
+# Edit warp-route-deployment.yaml and add/remove validators
+
+# 3. Apply changes
+hyperlane warp apply \
+  --config ${CONFIG_FILE} \
+  --warp ./warp/warp.json \
+  --private-key ${BSC_PRIVATE_KEY}
+```
+
+**Reference**: See the "Managing Validators on Existing Warp Routes" section in the [official guide](https://github.com/igorv43/cw-hyperlane/blob/main/WARP-ROUTES-TESTNET.md).
+
+---
+
+## Step 6: Burn Functionality
+
+### 6.1. How Burn Works
+
+The `HypERC20` contract automatically implements:
+
+- **Burn rate**: `0.01%` (1/10000) on all local transfers
+- **Cross-chain transfers**: Not affected by burn
+- **Event emitted**: `BurnFeeApplied` when burn occurs
+
+### 6.2. Test Transfer and Verify Burn
+
+**⚠️ IMPORTANT**: The burn functionality only works if you did a **manual deployment** using Foundry (Option A of Step 3). If you used the Hyperlane CLI (Option B), the contract does not have burn.
+
+#### 6.2.1. Transfer Tokens to Test
+
+```bash
+# Replace <TOKEN_ADDRESS> with your contract address
+# Example: 0xC61134c6794043db11120018BbFDD2F4280F2268 (contract with burn)
+
+# Transfer 100 tokens (with 6 decimals = 100000000)
+cast send <TOKEN_ADDRESS> \
+  "transfer(address,uint256)" \
+  0x867f9CE9F0D7218b016351CB6122406E6D247a5e \
+  100000000 \
+  --rpc-url https://bsc-testnet.publicnode.com \
+  --private-key 0x819b680e3578eac4f79b8fde643046e88f3f9bb10a3ce1424e3642798ef39b42 \
+  --legacy
+```
+
+#### 6.2.2. Verify Burn in Transaction
+
+After the transfer, check on BscScan:
+
+1. **Access the transaction on BscScan**:
+   ```
+   https://testnet.bscscan.com/tx/<TRANSACTION_HASH>
+   ```
+
+2. **Look for events**:
+   - ✅ **Event `BurnFeeApplied`**: Confirms that burn occurred
+     - `totalAmount`: 100000000 (100 tokens)
+     - `burnAmount`: 10000 (0.01 token = 0.01%)
+     - `transferAmount`: 99990000 (99.99 tokens)
+   - ✅ **Transfer to `0x0000...0000`**: Burned tokens (10000)
+   - ✅ **Transfer to recipient**: Received tokens (99990000)
+
+3. **Verify total supply** (should have decreased):
+   ```bash
+   cast call <TOKEN_ADDRESS> \
+     "totalSupply()" \
+     --rpc-url https://bsc-testnet.publicnode.com
+   ```
+   - Should have decreased by 10000 (0.01 token burned)
+
+4. **Verify recipient balance**:
+   ```bash
+   cast call <TOKEN_ADDRESS> \
+     "balanceOf(address)" \
+     0x867f9CE9F0D7218b016351CB6122406E6D247a5e \
+     --rpc-url https://bsc-testnet.publicnode.com
+   ```
+   - Should show 99990000 (99.99 tokens received)
+
+#### 6.2.3. Complete Test Example
+
+```bash
+# Variables
+TOKEN_ADDRESS="0xC61134c6794043db11120018BbFDD2F4280F2268"
+RECIPIENT="0x867f9CE9F0D7218b016351CB6122406E6D247a5e"
+AMOUNT="100000000"  # 100 tokens with 6 decimals
+PRIVATE_KEY="0x819b680e3578eac4f79b8fde643046e88f3f9bb10a3ce1424e3642798ef39b42"
+RPC_URL="https://bsc-testnet.publicnode.com"
+
+# 1. Verify supply before
+echo "Supply before:"
+cast call ${TOKEN_ADDRESS} "totalSupply()" --rpc-url ${RPC_URL}
+
+# 2. Make transfer
+echo "Making transfer of 100 tokens..."
+cast send ${TOKEN_ADDRESS} \
+  "transfer(address,uint256)" \
+  ${RECIPIENT} \
+  ${AMOUNT} \
+  --rpc-url ${RPC_URL} \
+  --private-key ${PRIVATE_KEY} \
+  --legacy
+
+# 3. Verify supply after (should have decreased by 10000)
+echo "Supply after:"
+cast call ${TOKEN_ADDRESS} "totalSupply()" --rpc-url ${RPC_URL}
+
+# 4. Verify recipient balance (should have received 99990000)
+echo "Recipient balance:"
+cast call ${TOKEN_ADDRESS} \
+  "balanceOf(address)" \
+  ${RECIPIENT} \
+  --rpc-url ${RPC_URL}
+```
+
+### 6.3. Contract Code
+
+The burn functionality is implemented in:
+```solidity
+// solidity/contracts/token/HypERC20.sol
+// Lines 100-161
+
+function transfer(address to, uint256 amount) public virtual override returns (bool) {
+    address owner = msg.sender;
+    uint256 burnAmount = amount / BURN_RATE;  // 0.01%
+    uint256 transferAmount = amount - burnAmount;
+    
+    if (burnAmount > 0) {
+        _burn(owner, burnAmount);
+        super._transfer(owner, to, transferAmount);
+        emit BurnFeeApplied(owner, to, amount, burnAmount, transferAmount);
+    } else {
+        super._transfer(owner, to, amount);
+    }
+    return true;
+}
+```
+
+---
+
+## Step 7: Link with Other Chains
+
+### 7.1. Add Remote Routers
+
+To link the warp route with other chains (e.g., Terra Classic, Solana, Ethereum):
+
+```bash
+# Add configuration for other chains in the same YAML file
+cat >> environments/testnet/warp-routes/lunc-bsc/warp-route-deployment.yaml << EOF
+
+# Example: Link with Terra Classic
+# terraclassic:
+#   isNft: false
+#   type: synthetic
+#   name: "Luna Classic"
+#   symbol: "wwwwLUNC"
+#   decimals: 6
+#   totalSupply: 0
+#   owner: "0xYourTerraAddress"
+#   interchainSecurityModule:
+#     type: messageIdMultisigIsm
+#     validators:
+#       - "242d8a855a8c932dec51f7999ae7d1e48b10c95e"
+#       - "f620f5e3d25a3ae848fec74bccae5de3edcd8796"
+#       - "1f030345963c54ff8229720dd3a711c15c554aeb"
+#     threshold: 2
+EOF
+```
+
+### 7.2. Multi-Chain Deployment
+
+```bash
+# Deploy on multiple chains at once
+hyperlane warp deploy \
+  --config environments/testnet/warp-routes/lunc-bsc/warp-route-deployment.yaml \
+  --registry ~/.hyperlane/registry \
+  --private-key ${BSC_PRIVATE_KEY} \
+  --yes
+```
+
+---
+
+## Step 8: Verify Complete Configuration
+
+### 8.1. Verify Synthetic Token
+
+```bash
+# Read warp route configuration
+hyperlane warp read \
+  --config ${CONFIG_FILE} \
+  --chain bsctestnet
+```
+
+### 8.2. Test Burn Functionality
+
+**⚠️ IMPORTANT**: Burn only works if you did manual deployment (Step 3.2). If you used Hyperlane CLI, there is no burn.
+
+#### Transfer Tokens to Test
+
+```bash
+# Replace <TOKEN_ADDRESS> with your contract address
+TOKEN_ADDRESS="0xC61134c6794043db11120018BbFDD2F4280F2268"  # Example
+RECIPIENT="0x867f9CE9F0D7218b016351CB6122406E6D247a5e"
+AMOUNT="100000000"  # 100 tokens with 6 decimals
+
+# Make transfer
+cast send ${TOKEN_ADDRESS} \
+  "transfer(address,uint256)" \
+  ${RECIPIENT} \
+  ${AMOUNT} \
+  --rpc-url https://bsc-testnet.publicnode.com \
+  --private-key 0x819b680e3578eac4f79b8fde643046e88f3f9bb10a3ce1424e3642798ef39b42 \
+  --legacy
+```
+
+#### Verify Burn on BscScan
+
+1. Access the transaction on BscScan using the returned hash
+2. Look for the `BurnFeeApplied` event:
+   - `totalAmount`: 100000000 (100 tokens sent)
+   - `burnAmount`: 10000 (0.01 token burned = 0.01%)
+   - `transferAmount`: 99990000 (99.99 tokens received)
+3. Verify total supply (should have decreased by 10000)
+
+#### Verify Results
+
+```bash
+# Verify total supply (should have decreased)
+cast call ${TOKEN_ADDRESS} \
+  "totalSupply()" \
+  --rpc-url https://bsc-testnet.publicnode.com
+
+# Verify recipient balance (should have 99990000)
+cast call ${TOKEN_ADDRESS} \
+  "balanceOf(address)" \
+  ${RECIPIENT} \
+  --rpc-url https://bsc-testnet.publicnode.com
+```
+
+---
+
+## Command Summary
+
+### Complete Script
+
+```bash
+#!/bin/bash
+# create-warp-bsc.sh
+
+set -e
+
+# Variables
+WARP_ROUTE_NAME="lunc-bsc"
+CONFIG_DIR="environments/testnet/warp-routes/${WARP_ROUTE_NAME}"
+CONFIG_FILE="${CONFIG_DIR}/warp-route-deployment.yaml"
+REGISTRY_PATH="~/.hyperlane/registry"
+BSC_PRIVATE_KEY="0xYourPrivateKey"  # ⚠️ Replace with your private key
+
+echo "=== Step 1: Create Token Configuration ==="
+cd ~/smart-hyperlane-monorepo
+mkdir -p ${CONFIG_DIR}
+
+cat > ${CONFIG_FILE} << 'EOF'
+---
+bsctestnet:
+  isNft: false
+  type: synthetic
+  name: "Luna Classic"
+  symbol: "wwwwLUNC"
+  decimals: 6
+  totalSupply: 0
+  owner: "0xYOUR_BSC_ADDRESS_HERE"
+  interchainSecurityModule:
+    type: messageIdMultisigIsm
+    validators:
+      - "242d8a855a8c932dec51f7999ae7d1e48b10c95e"
+      - "f620f5e3d25a3ae848fec74bccae5de3edcd8796"
+      - "1f030345963c54ff8229720dd3a711c15c554aeb"
+    threshold: 2
+EOF
+
+echo "⚠️ IMPORTANT: Edit the file and replace 0xYOUR_BSC_ADDRESS_HERE with your real address"
+echo "✅ Token configuration created"
+
+echo ""
+echo "=== Step 2: Deploy Synthetic Warp Route ==="
+
+hyperlane warp deploy \
+  --config ${CONFIG_FILE} \
+  --registry ${REGISTRY_PATH} \
+  --private-key ${BSC_PRIVATE_KEY} \
+  --yes \
+  --verbosity debug
+
+echo "✅ Synthetic warp route deployed"
+
+echo ""
+echo "=== Step 3: Verify Deployment ==="
+echo "Verifying warp route configuration..."
+hyperlane warp read \
+  --config ${CONFIG_FILE} \
+  --chain bsctestnet
+
+echo ""
+echo "✅ Configuration complete!"
+echo ""
+echo "Next steps:"
+echo "1. Note the contract address returned in Step 2"
+echo "2. Verify the contract on BscScan Testnet"
+echo "3. Test local transfers (which will trigger 0.01% burn)"
+echo "4. Link with other chains if needed"
+```
+
+---
+
+## Troubleshooting
+
+### Error: "Missing mailbox address"
+
+**Problem**: The Mailbox was not configured.
+
+**Solution**: Add the Mailbox address to the configuration file:
+
+```yaml
+bsctestnet:
+  type: synthetic
+  mailbox: "0xF9F6F5646F478d5ab4e20B0F910C92F1CCC9Cc6D"  # BSC Testnet Mailbox
+  # ... rest of configuration
+```
+
+### Error: "Insufficient funds"
+
+**Problem**: You don't have enough BNB for gas fees.
+
+**Solution**: 
+- For testnet: Get BNB Testnet from a faucet:
+  - https://testnet.bnbchain.org/faucet-smart
+  - https://www.bnbchain.org/en/testnet-faucet
+- For mainnet: Make sure you have enough BNB
+
+### Error: "Invalid token config"
+
+**Problem**: The configuration file is incorrect.
+
+**Solution**: Check the YAML format:
+
+```bash
+# Validate YAML
+cat ${CONFIG_FILE} | yq eval '.' -  # Requires yq installed
+```
+
+### Error: "Contract already deployed"
+
+**Problem**: The contract was already deployed previously.
+
+**Solution**: 
+- Use `foreignDeployment` in the configuration file to reference an existing contract
+- Or remove the existing contract and do a new deployment
+
+### Error: "Invalid validator address"
+
+**Problem**: The validator address is not in the correct format.
+
+**Solution**: 
+- Use hexadecimal addresses of exactly 20 bytes (40 characters)
+- **DO NOT include** the `0x` prefix at the beginning
+- Correct example: `242d8a855a8c932dec51f7999ae7d1e48b10c95e`
+- Incorrect example: `0x242d8a855a8c932dec51f7999ae7d1e48b10c95e`
+
+### Error: "Threshold exceeds number of validators"
+
+**Problem**: The threshold is greater than the number of validators.
+
+**Solution**: 
+- The `threshold` must be less than or equal to the number of validators
+- Example: If you have 3 validators, the threshold can be 1, 2, or 3 (cannot be 4)
+
+---
+
+## Differences between Solana, Ethereum and BSC
+
+| Aspect | Solana | Ethereum | BSC |
+|---------|--------|----------|-----|
+| **Config Format** | JSON | YAML | YAML |
+| **CLI** | Rust (`cargo run`) | TypeScript (`hyperlane`) | TypeScript (`hyperlane`) |
+| **Contract** | Program ID (base58) | Address (hex) | Address (hex) |
+| **Gas Fees** | SOL (lamports) | ETH (wei) | BNB (wei) |
+| **Decimals** | 9 (standard) | 18 (standard) | 18 (standard) or 6 (Terra) |
+| **Chain Name** | `solanatestnet` | `ethereum` | `bsctestnet` |
+| **Domain ID** | 1399811150 | 1 | 97 |
+| **Burn** | Not implemented | 0.01% automatic | 0.01% automatic |
+| **Explorer** | Solscan | Etherscan | BscScan |
+
+---
+
+## Next Steps
+
+After completing this guide:
+
+1. **Important Information**:
+   - Contract address: Note the address returned in deployment
+   - Burn functionality: Already implemented (0.01% on local transfers)
+
+2. **Link with Other Chains**:
+   - Add other chains to the configuration file
+   - Deploy on multiple chains
+   - Configure remote routers
+
+3. **Test Functionality**:
+   - Test local transfers (verify burn)
+   - Test cross-chain transfers
+   - Verify events on BscScan
+
+---
+
+## References
+
+- [Hyperlane Warp Routes Documentation](https://docs.hyperlane.xyz/docs/guides/warp-routes/overview)
+- [WARP-ROUTES-TESTNET.md](https://github.com/igorv43/cw-hyperlane/blob/main/WARP-ROUTES-TESTNET.md) - Official Warp Routes guide (main reference)
+- [HypERC20 Contract](../solidity/contracts/token/HypERC20.sol) - Contract with burn functionality
+- [COMPLETE-GUIDE-CREATE-WARP-ROUTE-SOLANA.md](./COMPLETE-GUIDE-CREATE-WARP-ROUTE-SOLANA.md) - Complete guide for Solana
+- [COMPLETE-GUIDE-CREATE-WARP-ROUTE-ETHEREUM.md](./COMPLETE-GUIDE-CREATE-WARP-ROUTE-ETHEREUM.md) - Complete guide for Ethereum
+- [BSC Testnet Explorer](https://testnet.bscscan.com/)
+- [BSC Testnet Faucet](https://testnet.bnbchain.org/faucet-smart)

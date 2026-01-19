@@ -1,0 +1,41 @@
+---
+# Configuração do Warp Route Sintético (HypERC20) na Optimism Mainnet
+# Token sintético que cria um novo ERC20 do zero com funcionalidade de queima (0.01%)
+# 
+# Este arquivo foi gerado automaticamente pelo script deploy-hyp-erc20-optimism-completo.sh
+# Baseado no exemplo: https://github.com/hyperlane-xyz/hyperlane-monorepo/blob/main/typescript/cli/examples/warp-route-deployment.yaml
+
+optimism:
+  type: synthetic  # Token sintético (HypERC20)
+  isNft: false  # Token fungível (false) ou NFT (true)
+  
+  # Metadados do token (obrigatórios para synthetic)
+  name: "upusd"
+  symbol: "upusd"
+  decimals: 6
+  initialSupply: 15000000000  # ⚠️ IMPORTANTE: Use initialSupply (não totalSupply) para tokens sintéticos
+  
+  # Owner do contrato (obrigatório)
+  owner: "0x6d7fFa706F4898f87083255a44eEC503ED02Ab78"
+  
+  # Endereço do Mailbox (obrigatório quando o registry não tem os endereços)
+  mailbox: "0xd4C1905BB1D26BC93DAC913e13CaCC278CdCC80D"
+  
+  # Interchain Gas Paymaster (opcional, mas recomendado)
+  interchainGasPaymaster: "0xD8A76C4D91fCbB7Cc8eA795DFDF870E48368995C"
+  
+  # Interchain Security Module (ISM) - Configuração de segurança
+  # Define quais validadores devem assinar as mensagens cross-chain
+  interchainSecurityModule:
+    type: messageIdMultisigIsm  # Tipo de ISM: multisig baseado em message ID
+    validators:  # Lista de endereços dos validadores (hexadecimal COM prefixo 0x para EVM)
+      - "0x20349eadc6c72e94ce38268b96692b1a5c20de4f"
+      - "0x0d4c1394a255568ec0ecd11795b28d1bda183ca4"
+      - "0xd8c1cCbfF28413CE6c6ebe11A3e29B0D8384eDbB"
+      - "0x1b9e5f36c4bfdb0e3f0df525ef5c888a4459ef99"
+      - "0xf9dfaa5c20ae1d84da4b2696b8dc80c919e48b12"
+      - "0x5450447aee7b544c462c9352bef7cad049b0c2dc"
+    threshold: 4  # Número mínimo de assinaturas necessárias (4 de 6 validadores)
+  
+  # Endereço do contrato já deployado (usar foreignDeployment para referenciar contrato manual)
+  foreignDeployment: "0x7d637c37828c01ad6241624ffaad7b48eb3cc516"

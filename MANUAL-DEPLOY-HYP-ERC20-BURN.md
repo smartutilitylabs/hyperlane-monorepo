@@ -63,7 +63,7 @@ bsctestnet:
   name: "upusd"
   symbol: "upusd"
   decimals: 6
-  initialSupply: 15000000000
+  initialSupply: 150000000000
   owner: "0x8BD456605473ad4727ACfDCA0040a0dBD4be2DEA"
   mailbox: "0xF9F6F5646F478d5ab4e20B0F910C92F1CCC9Cc6D"
   interchainSecurityModule:
